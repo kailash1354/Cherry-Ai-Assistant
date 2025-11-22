@@ -1,0 +1,109 @@
+import speech_recognition as sr
+import webbrowser
+import os
+import music_library
+import requests
+
+recognizer = sr.Recognizer()
+apiKey = "Enter Your Api Key"
+
+def speak(text):
+    """Uses the Mac's built-in 'say' command for reliable text-to-speech."""
+    print(f"Cherry says: {text}")
+    os.system(f"say '{text}'")
+
+def summarize_text(article):
+    """Create a ~200–250 word summary from NewsAPI article."""
+    description = article.get("description", "")
+    content = article.get("content", "")
+    text = f"{description} {content}".strip()
+
+    if not text:
+        return "Sorry, I don’t have enough details. Please check the article online."
+
+    # Roughly 1000 characters = 200–250 words
+    return text[:1000]
+
+def processCommand(c):
+    print(f"Command received: {c}")
+    
+    if "open youtube" in c.lower():
+        webbrowser.open("https://youtube.com")
+    elif "open google" in c.lower():
+        webbrowser.open("https://google.com")
+    elif "open linkedin" in c.lower():
+        webbrowser.open("https://linkedin.com")
+    elif "open facebook" in c.lower():
+        webbrowser.open("https://facebook.com")
+    elif c.lower().startswith("play"):
+        song = c.lower().split(" ")[1]
+        link = music_library.music.get(song)
+        if link:
+            webbrowser.open(link)
+        else:
+            speak("Sorry, I don't know that song.")
+    
+    elif "news about" in c.lower():
+        topic = c.lower().split("news about")[-1].strip()
+        url = f"https://newsapi.org/v2/everything?q={topic}&sortBy=popularity&apiKey={apiKey}"
+        response = requests.get(url)
+        data = response.json()
+
+        if data.get("status") == "ok" and data.get("articles"):
+            article = data["articles"][0]  # take the top article
+            summary = summarize_text(article)
+            headline = article.get("title", "No title")
+            speak(f"Here's the latest news about {topic}: {headline}. {summary}")
+        else:
+            speak(f"Sorry, I couldn't find detailed news about {topic}.")
+
+    elif "news" in c.lower():
+        # General top headlines
+        url = f"https://newsapi.org/v2/top-headlines?country=us&apiKey={apiKey}"
+        response = requests.get(url)
+        data = response.json()
+
+        if data.get("status") == "ok":
+            articles = data["articles"][:5]
+            for i, article in enumerate(articles, start=1):
+                headline = article.get("title", "No title")
+                speak(f"News {i}: {headline}")
+        else:
+            speak("Sorry, I couldn't fetch the news right now.")
+            
+            
+            
+
+if __name__ == "__main__":
+    speak("Cherry is active now...")
+    
+    while True:
+        r = sr.Recognizer()
+        try:
+            with sr.Microphone() as source:
+                print("Listening for wake word...")
+                r.adjust_for_ambient_noise(source, duration=0.5)
+                audio = r.listen(source)
+            
+            word = r.recognize_google(audio)
+            print(f"You said: {word}") 
+
+            if "cherry" in word.lower():
+                speak("What should I do?")
+              
+                with sr.Microphone() as source:
+                    print("Listening for command...")
+                    r.adjust_for_ambient_noise(source, duration=0.5)
+                    audio = r.listen(source)
+                    command = r.recognize_google(audio)
+                    
+                    if "stop listening" in command.lower():
+                        speak("Turning off. Goodbye!")
+                        break 
+                    else:
+                        processCommand(command)
+                 
+        except sr.UnknownValueError:
+            pass
+        except Exception as e:
+            print(f"An error occurred: {e}")
